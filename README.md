@@ -1,4 +1,8 @@
-# React + Vite
+# Thermal Equity AI
+
+AI-powered Urban Climate Intelligence project for Chennai.
+
+## React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
