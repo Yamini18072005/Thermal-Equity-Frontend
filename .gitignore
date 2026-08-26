@@ -5,3 +5,7 @@ Thermal-Equity-AI/
 data/raw/CMAExpansionMap.pdf
 data/raw/landsat/*.tif
 data/raw/lulc/*.tif
+ml-service/venv/
+ml-service/**/__pycache__/
+*.pyc
+.env
