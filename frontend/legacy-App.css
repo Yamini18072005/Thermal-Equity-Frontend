@@ -132,6 +132,7 @@ html, body, #root {
   font-size: 0.95rem;
   letter-spacing: 0.5px;
   background: linear-gradient(90deg, #ffffff, #d0dbe7);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -371,6 +372,7 @@ html, body, #root {
 .hero-title { font-size: 1.4rem; font-weight: 800; }
 .highlight-text {
   background: linear-gradient(90deg, var(--accent-orange), var(--accent-red));
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -422,6 +424,7 @@ html, body, #root {
 .temp-number {
   font-size: 2.5rem; font-weight: 800; line-height: 1; font-family: var(--font-mono);
   background: linear-gradient(180deg, #ffffff 40%, var(--accent-orange));
+  background-clip: text;
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 .temp-unit { font-size: 1.2rem; font-weight: 700; color: var(--accent-orange); }

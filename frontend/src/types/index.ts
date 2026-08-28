@@ -13,8 +13,19 @@ export interface Coordinates {
   lng: number;
 }
 
+export interface RegionOption {
+  id: string;
+  name: string;
+  state: string;
+  country: string;
+  tag: string;
+  centerCoordinates: Coordinates;
+  waterways: string[];
+}
+
 export interface LocationData {
   id: string;
+  regionId: string; // e.g. 'chennai', 'delhi', 'mumbai', 'bengaluru'
   name: string;
   district: string;
   coordinates: Coordinates;
@@ -75,6 +86,7 @@ export interface RiskScoreResult {
 
 export interface CompoundRisk {
   id: string;
+  regionId: string;
   title: string;
   severity: RiskLevel;
   affectedLocationIds: string[];
@@ -88,6 +100,7 @@ export interface CompoundRisk {
 
 export interface AlertItem {
   id: string;
+  regionId: string;
   title: string;
   locationId: string;
   locationName: string;
@@ -102,6 +115,7 @@ export interface AlertItem {
 
 export interface MitigationRecommendation {
   id: string;
+  regionId: string;
   title: string;
   locationId: string;
   locationName: string;
@@ -153,6 +167,7 @@ export interface DataSource {
 }
 
 export interface UserPreferences {
+  activeRegionId: string; // e.g. 'chennai', 'delhi', 'mumbai', 'bengaluru'
   temperatureUnit: 'Celsius' | 'Fahrenheit';
   theme: 'Dark Navy' | 'Coastal Teal Light';
   defaultLocationId: string;

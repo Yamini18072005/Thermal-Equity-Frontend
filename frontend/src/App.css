@@ -44,6 +44,10 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html, body {
   background-color: var(--bg-deep-navy);
   color: #F8FAFC;
@@ -51,6 +55,29 @@ html, body {
   overflow-x: hidden;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+}
+
+[id^="section-"] {
+  scroll-margin-top: 84px;
+}
+
+.mobile-toggle-btn {
+  display: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  color: #FFF;
+  font-size: 1.1rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .mobile-toggle-btn {
+    display: flex;
+  }
 }
 
 /* Custom Scrollbar */
@@ -287,7 +314,7 @@ html, body {
   color: #000;
   font-family: var(--font-title);
   font-weight: 900;
-  fontSize: 0.85rem;
+  font-size: 0.85rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -371,6 +398,7 @@ html, body {
 
 .gradient-text-highlight {
   background: var(--gradient-cyan-violet);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

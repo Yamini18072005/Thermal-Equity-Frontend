@@ -1,7 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import './App.css';
 
-// --- CHENNAI DEMO / SIMULATED DATASET ---
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+// --- CHENNAI BASE LOCALITIES DATASET ---
 const chennaiLocations = [
   {
     id: 'perambur',
@@ -158,83 +160,71 @@ const aiInsightsData = [
 
 const cityActionsData = [
   {
+    id: 'act-1',
     icon: '🌳',
     title: 'Increase Green Cover',
     area: 'Perambur',
     priority: 'Critical',
     impact: 'Reduce surface heat by 2.4°C',
     confidence: '95%',
+    actionDetails: 'Deploying municipal native urban tree canopy planting along high-radiance concrete corridors.',
   },
   {
+    id: 'act-2',
     icon: '💧',
     title: 'Improve Public Cooling Access',
     area: 'T. Nagar',
     priority: 'High',
     impact: 'Support dense pedestrian zones',
     confidence: '92%',
+    actionDetails: 'Activating 15 misting stations and 40 free electrolyte distribution hubs along Ranganathan St.',
   },
   {
+    id: 'act-3',
     icon: '🚌',
     title: 'Install Shaded Public Waiting Areas',
     area: 'Ambattur',
     priority: 'High',
     impact: 'Lower commuter heat exposure',
     confidence: '89%',
+    actionDetails: 'Retrofitting reflective cool roofs and solar-powered cooling shelters at major bus transit stops.',
   },
   {
+    id: 'act-4',
     icon: '🏥',
     title: 'Activate Community Heat Response',
     area: 'Royapuram',
     priority: 'Critical',
     impact: 'Protect vulnerable elderly groups',
     confidence: '94%',
+    actionDetails: 'Dispatching mobile medical heat-health monitoring vans and establishing climate refuge shelters.',
   },
 ];
 
 const reportsData = [
   {
+    id: 'rep-1',
     icon: '◫',
     title: 'Weekly Heat Risk Report',
     text: 'Seven-day satellite land surface temperature shift analysis and hotspot tracking.',
   },
   {
+    id: 'rep-2',
     icon: '◩',
     title: 'Thermal Equity Summary',
     text: 'Correlates heat intensity with community vulnerability scores and cooling access gaps.',
   },
   {
+    id: 'rep-3',
     icon: '▤',
     title: 'Community Vulnerability Assessment',
     text: 'Multidimensional Census model for density, occupational exposure, and canopy access.',
   },
   {
+    id: 'rep-4',
     icon: '▥',
     title: 'Priority Intervention Report',
     text: 'AI-generated intervention roadmap for municipal tree planting and misting dispatches.',
-  },
-];
-
-const notificationsData = [
-  {
-    id: 1,
-    title: 'Critical heat advisory issued for Perambur (41.8°C)',
-    time: '2 mins ago',
-    icon: '🔥',
-    unread: true,
-  },
-  {
-    id: 2,
-    title: 'AI model recalculated thermal equity score for T. Nagar',
-    time: '8 mins ago',
-    icon: '✦',
-    unread: true,
-  },
-  {
-    id: 3,
-    title: 'Weekly Chennai thermal risk report ready',
-    time: '15 mins ago',
-    icon: '▣',
-    unread: false,
   },
 ];
 
@@ -264,8 +254,11 @@ function Modal({ open, onClose, title, tag, wide = false, children }) {
 }
 
 export default function App() {
-  // State management
+  // Navigation & UI States
   const [activeNav, setActiveNav] = useState('dashboard');
+  const [dashboardData, setDashboardData] = useState(null);
+  const [backendLoading, setBackendLoading] = useState(true);
+  const [backendError, setBackendError] = useState(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -276,12 +269,42 @@ export default function App() {
   const [showMapModal, setShowMapModal] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedAction, setSelectedAction] = useState(null);
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState(null);
+  const [alertSuccessMsg, setAlertSuccessMsg] = useState(null);
 
   // Active locality & controls state
-  const [selectedLocality, setSelectedLocality] = useState(chennaiLocations[0]);
+  const [selectedLocalityId, setSelectedLocalityId] = useState('perambur');
   const [selectedReport, setSelectedReport] = useState(reportsData[0]);
   const [tempUnit, setTempUnit] = useState('C');
   const [liveSeconds, setLiveSeconds] = useState(0);
+  const [localitySearch, setLocalitySearch] = useState('');
+
+  // Notifications State
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1,
+      title: 'Critical heat advisory issued for Perambur',
+      time: '2 mins ago',
+      icon: '🔥',
+      unread: true,
+    },
+    {
+      id: 2,
+      title: 'AI model recalculated thermal equity score for T. Nagar',
+      time: '8 mins ago',
+      icon: '✦',
+      unread: true,
+    },
+    {
+      id: 3,
+      title: 'Weekly Chennai thermal risk report ready',
+      time: '15 mins ago',
+      icon: '▣',
+      unread: false,
+    },
+  ]);
 
   // Live timer tick effect
   useEffect(() => {
@@ -291,12 +314,166 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // Fetch Dashboard Summary from FastAPI Backend
+  const fetchDashboardData = useCallback(async () => {
+    console.log('[API] Dashboard request started: fetching /api/dashboard/summary from', `${API_URL}/api/dashboard/summary`);
+    try {
+      setBackendLoading(true);
+      const response = await fetch(`${API_URL}/api/dashboard/summary`);
+      console.log('[API] Dashboard response received: status', response.status, response.statusText);
+
+      if (!response.ok) {
+        throw new Error(`Backend returned HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('[API] Dashboard JSON received:', data);
+
+      setDashboardData(data);
+      console.log('[API] Dashboard data stored successfully');
+      setBackendError(null);
+    } catch (error) {
+      console.error('[API] Dashboard request failed:', error.message);
+      setBackendError(error.message);
+    } finally {
+      setBackendLoading(false);
+    }
+  }, []);
+
+  // Initial fetch on mount + auto refresh every 30s
+  useEffect(() => {
+    fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]);
+
+  // Derived merged localities data combining base coordinates with live backend telemetry
+  const displayLocations = useMemo(() => {
+    if (!dashboardData?.latest_thermal_readings?.length) {
+      return chennaiLocations;
+    }
+
+    const readingsMap = {};
+    dashboardData.latest_thermal_readings.forEach((reading) => {
+      const locKey = (reading.location_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (locKey && !readingsMap[locKey]) {
+        readingsMap[locKey] = reading;
+      }
+    });
+
+    return chennaiLocations.map((loc) => {
+      const cleanId = loc.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanName = loc.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const match = readingsMap[cleanId] || readingsMap[cleanName];
+
+      if (match) {
+        return {
+          ...loc,
+          airTemp: match.temperature,
+          heatIndex: match.heat_index ?? match.temperature,
+          humidity: `${match.humidity}%`,
+          lastUpdated: match.recorded_at,
+        };
+      }
+      return loc;
+    });
+  }, [dashboardData]);
+
+  // Selected locality object
+  const selectedLocality = useMemo(() => {
+    const found = displayLocations.find((loc) => loc.id === selectedLocalityId);
+    return found || displayLocations[0];
+  }, [displayLocations, selectedLocalityId]);
+
+  // Filtered localities for search
+  const filteredLocations = useMemo(() => {
+    if (!localitySearch.trim()) return displayLocations;
+    return displayLocations.filter((loc) =>
+      loc.name.toLowerCase().includes(localitySearch.toLowerCase())
+    );
+  }, [displayLocations, localitySearch]);
+
   // Temperature unit conversion helper
   const formatTemp = (celsius) => {
+    if (typeof celsius !== 'number' || Number.isNaN(celsius)) return '--';
     if (tempUnit === 'F') {
       return `${((celsius * 9) / 5 + 32).toFixed(1)}°F`;
     }
     return `${celsius.toFixed(1)}°C`;
+  };
+
+  // Real backend metrics calculations
+  const latestReading = dashboardData?.latest_thermal_readings?.[0];
+  const activeAlertsCount = dashboardData?.active_alerts ?? 9;
+  const totalLocationsCount = dashboardData?.total_monitored_locations ?? displayLocations.length;
+  const recentMeasurementsCount = dashboardData?.recent_measurements ?? 13;
+  const topRisk = dashboardData?.high_risk_locations?.[0];
+  const riskScore = topRisk ? Math.round(topRisk.risk_score) : (selectedLocality?.vulnerabilityScore ?? 90);
+  const riskLevel = topRisk ? topRisk.risk_level.toUpperCase() : (selectedLocality?.risk?.toUpperCase() ?? 'HIGH');
+  const peakTemp = dashboardData?.latest_thermal_readings?.length
+    ? Math.max(...dashboardData.latest_thermal_readings.map((r) => r.temperature))
+    : 44.6;
+
+  // Navigation click handler with smooth scrolling
+  const handleNavClick = (navKey, sectionId) => {
+    setActiveNav(navKey);
+    setMobileSidebarOpen(false);
+    if (sectionId) {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  };
+
+  // Report download generator
+  const handleDownloadReport = (rep) => {
+    const reportText = `# THERMAL EQUITY AI - MUNICIPAL REPORT\n` +
+      `Title: ${rep.title}\n` +
+      `Generated: ${new Date().toLocaleString()}\n` +
+      `City: Chennai, Tamil Nadu, India\n` +
+      `Active Monitored Stations: ${totalLocationsCount}\n` +
+      `Total Recorded Measurements: ${recentMeasurementsCount}\n` +
+      `Active Thermal Risk Alerts: ${activeAlertsCount}\n\n` +
+      `--- EXECUTIVE SUMMARY ---\n` +
+      `${rep.text}\n\n` +
+      `--- LIVE TELEMETRY SNAPSHOT ---\n` +
+      `Peak Land Surface Temperature: ${formatTemp(peakTemp)}\n` +
+      `Selected Station: ${selectedLocality.name}\n` +
+      `Air Temperature: ${formatTemp(selectedLocality.airTemp)}\n` +
+      `Heat Index (Apparent): ${formatTemp(selectedLocality.heatIndex)}\n` +
+      `Relative Humidity: ${selectedLocality.humidity}\n` +
+      `Vulnerability Score: ${selectedLocality.vulnerabilityScore}/100 (${selectedLocality.risk} Risk)\n` +
+      `Priority AI Action: ${selectedLocality.aiPriority}\n\n` +
+      `Generated automatically by Thermal Equity AI Platform.`;
+
+    const blob = new Blob([reportText], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${rep.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_brief.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Action deployment execution handler
+  const handleConfirmDeploy = () => {
+    if (!selectedAction) return;
+    const newNotif = {
+      id: Date.now(),
+      title: `Dispatched: ${selectedAction.title} in ${selectedAction.area}`,
+      time: 'Just now',
+      icon: selectedAction.icon,
+      unread: true,
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+    setActionSuccessMsg(`Success! ${selectedAction.title} dispatched to ${selectedAction.area}. Mobile units deployed.`);
+    setTimeout(() => {
+      setActionSuccessMsg(null);
+      setShowDeployModal(false);
+    }, 2200);
   };
 
   return (
@@ -328,28 +505,28 @@ export default function App() {
           <button
             type="button"
             className={`nav-btn ${activeNav === 'dashboard' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('dashboard'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('dashboard', 'section-top-metrics')}
           >
             <span><span className="nav-icon">⌘</span> Dashboard</span>
           </button>
           <button
             type="button"
             className={`nav-btn ${activeNav === 'map' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('map'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('map', 'section-map')}
           >
             <span><span className="nav-icon">◉</span> Thermal Map</span>
           </button>
           <button
             type="button"
             className={`nav-btn ${activeNav === 'analytics' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('analytics'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('analytics', 'section-analytics')}
           >
             <span><span className="nav-icon">∿</span> Heat Analytics</span>
           </button>
           <button
             type="button"
             className={`nav-btn ${activeNav === 'vulnerability' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('vulnerability'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('vulnerability', 'section-vulnerability')}
           >
             <span><span className="nav-icon">◎</span> Vulnerability</span>
           </button>
@@ -361,29 +538,29 @@ export default function App() {
           <button
             type="button"
             className={`nav-btn ${activeNav === 'alerts' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('alerts'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('alerts', 'section-alerts')}
           >
             <span><span className="nav-icon">⚠</span> Heat Alerts</span>
-            <span className="badge-alert">3</span>
+            <span className="badge-alert">{activeAlertsCount}</span>
           </button>
           <button
             type="button"
             className={`nav-btn ${activeNav === 'insights' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('insights'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('insights', 'section-insights')}
           >
             <span><span className="nav-icon">✦</span> AI Insights</span>
           </button>
           <button
             type="button"
             className={`nav-btn ${activeNav === 'recommendations' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('recommendations'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('recommendations', 'section-actions')}
           >
             <span><span className="nav-icon">➜</span> Recommendations</span>
           </button>
           <button
             type="button"
             className={`nav-btn ${activeNav === 'reports' ? 'active' : ''}`}
-            onClick={() => { setActiveNav('reports'); setMobileSidebarOpen(false); }}
+            onClick={() => handleNavClick('reports', 'section-reports')}
           >
             <span><span className="nav-icon">▣</span> Reports</span>
           </button>
@@ -413,11 +590,21 @@ export default function App() {
       <div className="main-layout-wrapper">
         {/* 2. TOP HEADER */}
         <header className="top-header-bar">
-          <div className="header-title-block">
-            <span className="header-breadcrumb">THERMAL EQUITY AI / LIVE INTELLIGENCE</span>
-            <h1 className="header-main-heading">
-              Urban Heat <span className="gradient-text-highlight">Intelligence</span>
-            </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="mobile-toggle-btn"
+              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+              title="Toggle Menu"
+            >
+              ☰
+            </button>
+            <div className="header-title-block">
+              <span className="header-breadcrumb">THERMAL EQUITY AI / LIVE INTELLIGENCE</span>
+              <h1 className="header-main-heading">
+                Urban Heat <span className="gradient-text-highlight">Intelligence</span>
+              </h1>
+            </div>
           </div>
 
           <div className="header-right-group">
@@ -425,10 +612,42 @@ export default function App() {
               <span>📍</span> MONITORING AREA: <strong>Chennai, India</strong>
             </div>
 
+            {/* Live Backend Connection Indicator */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: backendError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+                border: `1px solid ${backendError ? 'var(--border-critical)' : 'rgba(16, 185, 129, 0.35)'}`,
+                padding: '0.35rem 0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: backendError ? 'var(--color-crimson)' : 'var(--color-teal)',
+              }}
+            >
+              <span
+                style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: backendError ? 'var(--color-crimson)' : 'var(--color-teal)',
+                  display: 'inline-block',
+                }}
+              />
+              {backendLoading
+                ? 'CONNECTING API...'
+                : backendError
+                ? 'BACKEND OFFLINE (FALLBACK)'
+                : 'API CONNECTED'}
+            </div>
+
             <button
               type="button"
               className="btn-secondary"
               onClick={() => setTempUnit(tempUnit === 'C' ? 'F' : 'C')}
+              title="Toggle Temperature Unit"
             >
               °{tempUnit}
             </button>
@@ -439,9 +658,10 @@ export default function App() {
                 type="button"
                 className="notification-bell-btn"
                 onClick={() => setShowNotifications(!showNotifications)}
+                title="Notifications"
               >
                 🔔
-                {notificationsData.some((n) => n.unread) && <span className="unread-dot-badge" />}
+                {notifications.some((n) => n.unread) && <span className="unread-dot-badge" />}
               </button>
 
               {showNotifications && (
@@ -457,7 +677,7 @@ export default function App() {
                     </button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {notificationsData.map((n) => (
+                    {notifications.map((n) => (
                       <div key={n.id} style={{ background: 'rgba(0,0,0,0.4)', padding: '0.6rem', borderRadius: '8px', borderLeft: n.unread ? '3px solid var(--color-crimson)' : '3px solid #64748B', display: 'flex', gap: '0.6rem' }}>
                         <span>{n.icon}</span>
                         <div>
@@ -475,6 +695,33 @@ export default function App() {
 
         {/* DASHBOARD CONTENT AREA */}
         <main className="dashboard-content-container">
+
+          {/* Error Banner with Retry */}
+          {backendError && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid var(--border-critical)',
+                borderRadius: '10px',
+                padding: '0.75rem 1rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.8rem',
+                color: '#FFF',
+              }}
+            >
+              <span>⚠️ <strong>Unable to load live dashboard data:</strong> {backendError}. Operating on cached telemetry.</span>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={fetchDashboardData}
+                style={{ fontSize: '0.72rem', padding: '0.3rem 0.75rem' }}
+              >
+                ↻ Retry Connection
+              </button>
+            </div>
+          )}
           
           {/* 3. LIVE THERMAL MONITORING STATUS BAR */}
           <div className="live-status-bar">
@@ -483,15 +730,32 @@ export default function App() {
                 <span className="pulse-red-core" />
               </div>
               <span className="ls-title">LIVE THERMAL MONITORING</span>
-              <span className="ls-desc">AI system is analyzing urban heat conditions and vulnerability patterns across Chennai.</span>
+              <span className="ls-desc">
+                {backendLoading
+                  ? 'Loading dashboard data from FastAPI backend...'
+                  : dashboardData
+                  ? `FastAPI Telemetry Stream Active: ${recentMeasurementsCount} readings collected across ${totalLocationsCount} Chennai monitoring zones.`
+                  : 'AI system is analyzing urban heat conditions and vulnerability patterns across Chennai.'}
+              </span>
             </div>
-            <div className="ls-updated">
-              LAST UPDATED: Just now (:{liveSeconds < 10 ? `0${liveSeconds}` : liveSeconds}s)
+            <div className="ls-updated" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span>
+                LAST UPDATED: {latestReading ? new Date(latestReading.recorded_at).toLocaleTimeString() : 'Just now'} (:{liveSeconds < 10 ? `0${liveSeconds}` : liveSeconds}s)
+              </span>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem' }}
+                onClick={fetchDashboardData}
+                title="Sync with FastAPI backend"
+              >
+                ↻ Refresh
+              </button>
             </div>
           </div>
 
           {/* 4 & 5. TOP METRICS ROW (CURRENT HEAT & AI EQUITY SCORE) */}
-          <div className="metrics-top-row">
+          <div className="metrics-top-row" id="section-top-metrics">
             
             {/* CURRENT HEAT CARD */}
             <div className="metric-card-frame heat-focus">
@@ -500,13 +764,19 @@ export default function App() {
                 <span className="card-label">CURRENT HEAT</span>
                 <span style={{ fontSize: '0.7rem', color: 'var(--color-crimson)', fontWeight: 800 }}>🔥 HIGH THERMAL ADVISORY</span>
               </div>
-              <div className="heat-big-val">{formatTemp(41.8)}</div>
+              <div className="heat-big-val">
+                {formatTemp(latestReading ? latestReading.temperature : selectedLocality.airTemp)}
+              </div>
               <div style={{ fontSize: '0.78rem', color: '#FFF', fontWeight: 700 }}>
-                Extremely high thermal conditions detected in Perambur
+                {latestReading
+                  ? `Live measurement for ${latestReading.location_name || selectedLocality.name} (${latestReading.location_area || 'Chennai'})`
+                  : `High thermal conditions detected in ${selectedLocality.name}`}
               </div>
               <div className="heat-sub-info">
-                <span>Feels like: <strong>{formatTemp(44.2)}</strong></span>
-                <span style={{ color: 'var(--color-heat-orange)', fontWeight: 800 }}>Heat increase: ↑ 2.4°C</span>
+                <span>Feels like: <strong>{formatTemp(latestReading?.heat_index ?? selectedLocality.heatIndex)}</strong></span>
+                <span style={{ color: 'var(--color-heat-orange)', fontWeight: 800 }}>
+                  Humidity: {latestReading ? `${latestReading.humidity}%` : selectedLocality.humidity}
+                </span>
               </div>
             </div>
 
@@ -514,7 +784,7 @@ export default function App() {
             <div className="metric-card-frame equity-focus">
               <div className="card-top-header">
                 <span className="card-label">AI THERMAL EQUITY SCORE</span>
-                <span className="risk-scale-pill">CRITICAL RISK</span>
+                <span className="risk-scale-pill">{riskLevel} RISK</span>
               </div>
               <div className="score-ring-wrap">
                 <div className="svg-ring-container">
@@ -528,15 +798,15 @@ export default function App() {
                       stroke="var(--color-crimson)"
                       strokeWidth="7"
                       strokeDasharray="213"
-                      strokeDashoffset="27"
+                      strokeDashoffset={`${Math.max(0, 213 - (riskScore / 100) * 213)}`}
                       strokeLinecap="round"
                     />
                   </svg>
-                  <div className="score-number-overlay">87</div>
+                  <div className="score-number-overlay">{riskScore}</div>
                 </div>
                 <div>
                   <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.4rem', fontWeight: 900, color: '#FFF' }}>
-                    87 <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>/ 100</span>
+                    {riskScore} <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>/ 100</span>
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#CBD5E1', marginTop: '0.1rem' }}>
                     Heat exposure & vulnerability significantly elevated
@@ -548,36 +818,38 @@ export default function App() {
               </div>
             </div>
 
-            {/* QUICK STAT: LAND SURFACE HEAT */}
+            {/* QUICK STAT: MONITORED STATIONS & PEAK TEMP */}
             <div className="metric-card-frame">
               <div className="card-top-header">
                 <span className="card-label">PEAK LAND SURFACE TEMP</span>
               </div>
               <div style={{ fontFamily: 'var(--font-title)', fontSize: '2.1rem', fontWeight: 900, color: 'var(--color-cyan)', margin: '0.3rem 0' }}>
-                {formatTemp(44.6)}
+                {formatTemp(peakTemp)}
               </div>
               <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
-                Highest radiant asphalt temperature recorded in industrial corridors.
+                {dashboardData
+                  ? `Telemetry active across ${totalLocationsCount} stations in Chennai.`
+                  : 'Highest radiant asphalt temperature recorded in industrial corridors.'}
               </div>
             </div>
 
-            {/* QUICK STAT: CANOPY DEFICIT */}
+            {/* QUICK STAT: RECENT MEASUREMENTS & ALERTS */}
             <div className="metric-card-frame">
               <div className="card-top-header">
-                <span className="card-label">COMMUNITY CANOPY DEFICIT</span>
+                <span className="card-label">TELEMETRY & ALERTS</span>
               </div>
               <div style={{ fontFamily: 'var(--font-title)', fontSize: '2.1rem', fontWeight: 900, color: '#F59E0B', margin: '0.3rem 0' }}>
-                -78% Avg
+                {recentMeasurementsCount} Readings
               </div>
               <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
-                Critical green space deficit in high-density commercial & residential zones.
+                {activeAlertsCount} active heat advisory alerts flagged by risk calculation engine.
               </div>
             </div>
 
           </div>
 
           {/* 6 & 7. LIVE CHENNAI THERMAL RISK MAP & AI INSIGHTS */}
-          <div className="map-insights-grid">
+          <div className="map-insights-grid" id="section-map">
             
             {/* LIVE CHENNAI THERMAL RISK MAP */}
             <div className="cyber-card-frame">
@@ -586,21 +858,38 @@ export default function App() {
                   <h3>LIVE CHENNAI THERMAL RISK MAP</h3>
                   <p>Interactive spatial AI intelligence analyzing local Chennai micro-climates</p>
                 </div>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowMapModal(true)}
-                >
-                  EXPAND MAP ⛶
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    placeholder="Search locality..."
+                    value={localitySearch}
+                    onChange={(e) => setLocalitySearch(e.target.value)}
+                    style={{
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '6px',
+                      padding: '0.35rem 0.6rem',
+                      color: '#FFF',
+                      fontSize: '0.72rem',
+                      width: '130px',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setShowMapModal(true)}
+                  >
+                    EXPAND MAP ⛶
+                  </button>
+                </div>
               </div>
 
               {/* Map Canvas */}
               <div className="chennai-map-canvas">
                 <div className="radar-sweep-beam" />
 
-                {chennaiLocations.map((loc) => {
-                  const isSelected = selectedLocality.name === loc.name;
+                {filteredLocations.map((loc) => {
+                  const isSelected = selectedLocality.id === loc.id;
                   const riskClass = loc.risk.toLowerCase();
 
                   return (
@@ -608,7 +897,7 @@ export default function App() {
                       key={loc.id}
                       className={`map-locality-pin ${loc.offset} ${isSelected ? 'active' : ''}`}
                       style={{ left: `${loc.x}%`, top: `${loc.y}%` }}
-                      onClick={() => setSelectedLocality(loc)}
+                      onClick={() => setSelectedLocalityId(loc.id)}
                     >
                       <div className={`pin-hotspot-dot ${riskClass}`} />
                       <div className="pin-label-box">
@@ -626,7 +915,7 @@ export default function App() {
                       {selectedLocality.name} — <span style={{ color: selectedLocality.risk === 'Critical' ? 'var(--color-crimson)' : 'var(--color-heat-orange)' }}>{selectedLocality.risk.toUpperCase()} RISK</span>
                     </div>
                     <div style={{ fontSize: '0.72rem', color: '#CBD5E1', marginTop: '0.15rem' }}>
-                      Air Temp: {formatTemp(selectedLocality.airTemp)} | LST: {formatTemp(selectedLocality.lstTemp)} | Heat Index: {formatTemp(selectedLocality.heatIndex)} | Vulnerability: {selectedLocality.vulnerabilityScore}/100
+                      Air Temp: {formatTemp(selectedLocality.airTemp)} | LST: {formatTemp(selectedLocality.lstTemp)} | Heat Index: {formatTemp(selectedLocality.heatIndex)} | Humidity: {selectedLocality.humidity} | Vulnerability: {selectedLocality.vulnerabilityScore}/100
                     </div>
                   </div>
                   <button
@@ -640,7 +929,7 @@ export default function App() {
               </div>
 
               {/* Legend */}
-              <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.72rem', color: '#94A3B8', fontWeight: 700, marginTop: '0.2rem' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.72rem', color: '#94A3B8', fontWeight: 700, marginTop: '0.2rem', flexWrap: 'wrap' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--color-crimson)' }} /> Critical (Perambur, Royapuram)</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--color-heat-orange)' }} /> High (T. Nagar, Ambattur, Guindy)</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--color-amber)' }} /> Medium (Velachery, Anna Nagar)</span>
@@ -649,7 +938,7 @@ export default function App() {
             </div>
 
             {/* 7. AI INSIGHTS ("What the AI Sees") */}
-            <div className="cyber-card-frame">
+            <div className="cyber-card-frame" id="section-insights">
               <div className="card-header-bar">
                 <div className="card-title-wrap">
                   <h3>What the AI Sees</h3>
@@ -686,30 +975,38 @@ export default function App() {
           <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem' }}>
             
             {/* 8. HEAT ANALYTICS */}
-            <div className="cyber-card-frame">
+            <div className="cyber-card-frame" id="section-analytics">
               <div className="card-header-bar">
                 <div className="card-title-wrap">
                   <h3>HEAT ANALYTICS</h3>
-                  <p>Surface temperatures are 5.2°C above simulated seasonal baseline</p>
+                  <p>Surface temperatures are 5.2°C above seasonal baseline</p>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', background: 'rgba(0,0,0,0.4)', padding: '0.75rem', borderRadius: '10px' }}>
                 <div>
                   <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 800 }}>CURRENT TEMP</span>
-                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: '#FFF' }}>{formatTemp(41.8)}</div>
+                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: '#FFF' }}>
+                    {formatTemp(latestReading ? latestReading.temperature : 41.8)}
+                  </div>
                 </div>
                 <div>
                   <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 800 }}>DAILY PEAK</span>
-                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--color-crimson)' }}>{formatTemp(43.2)}</div>
+                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--color-crimson)' }}>
+                    {formatTemp(peakTemp)}
+                  </div>
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 800 }}>AVERAGE</span>
-                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--color-cyan)' }}>{formatTemp(37.6)}</div>
+                  <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 800 }}>HUMIDITY</span>
+                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--color-cyan)' }}>
+                    {latestReading ? `${latestReading.humidity}%` : '67%'}
+                  </div>
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 800 }}>HEAT ANOMALY</span>
-                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--color-heat-orange)' }}>+5.2°C</div>
+                  <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 800 }}>MEASUREMENTS</span>
+                  <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--color-heat-orange)' }}>
+                    {recentMeasurementsCount}
+                  </div>
                 </div>
               </div>
 
@@ -741,7 +1038,7 @@ export default function App() {
             </div>
 
             {/* 9. VULNERABILITY ANALYSIS ("Who is Most Vulnerable?") */}
-            <div className="cyber-card-frame">
+            <div className="cyber-card-frame" id="section-vulnerability">
               <div className="card-header-bar">
                 <div className="card-title-wrap">
                   <h3>Who is Most Vulnerable?</h3>
@@ -792,7 +1089,7 @@ export default function App() {
           </div>
 
           {/* 10. THERMAL INEQUALITY GAP (PROJECT CORE FEATURE) */}
-          <div className="cyber-card-frame" style={{ borderColor: 'var(--border-cyber)' }}>
+          <div className="cyber-card-frame" id="section-gap" style={{ borderColor: 'var(--border-cyber)' }}>
             <div className="card-header-bar">
               <div className="card-title-wrap">
                 <h3 style={{ fontSize: '1.1rem' }}>Thermal Inequality Gap</h3>
@@ -836,16 +1133,16 @@ export default function App() {
           </div>
 
           {/* 11. REAL-TIME HEAT ALERT */}
-          <div className="urgent-alert-banner">
+          <div className="urgent-alert-banner" id="section-alerts">
             <div>
               <span className="modal-tag" style={{ background: 'rgba(239, 68, 68, 0.2)', color: 'var(--color-crimson)', borderColor: 'var(--border-critical)' }}>
                 LIVE ALERT — HIGH HEAT EXPOSURE DETECTED
               </span>
               <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.25rem', fontWeight: 900, color: '#FFF', marginTop: '0.2rem' }}>
-                Location: Perambur, Chennai | Temp: {formatTemp(42.3)} | Vulnerability: HIGH (91/100)
+                Location: {topRisk?.location_name || selectedLocality.name}, Chennai | Temp: {formatTemp(latestReading ? latestReading.temperature : 42.3)} | Risk: {riskLevel} ({riskScore}/100)
               </div>
               <div style={{ fontSize: '0.78rem', color: '#CBD5E1', marginTop: '0.1rem' }}>
-                Temperature and community vulnerability indicators are currently elevated in this monitored area.
+                {topRisk?.explanation || 'Temperature and community vulnerability indicators are currently elevated in this monitored area.'}
               </div>
             </div>
             <button
@@ -859,7 +1156,7 @@ export default function App() {
           </div>
 
           {/* 12. AI-POWERED CITY ACTIONS */}
-          <div className="cyber-card-frame">
+          <div className="cyber-card-frame" id="section-actions">
             <div className="card-header-bar">
               <div className="card-title-wrap">
                 <h3>Recommended City Actions</h3>
@@ -869,7 +1166,7 @@ export default function App() {
 
             <div className="city-actions-grid">
               {cityActionsData.map((act) => (
-                <div key={act.title} className="action-card-item">
+                <div key={act.id || act.title} className="action-card-item">
                   <span style={{ fontSize: '1.5rem' }}>{act.icon}</span>
                   <div style={{ fontFamily: 'var(--font-title)', fontWeight: 900, fontSize: '0.9rem', color: '#FFF' }}>{act.title}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-cyan)', fontWeight: 800 }}>Priority: {act.area}</div>
@@ -879,7 +1176,10 @@ export default function App() {
                     type="button"
                     className="btn-secondary"
                     style={{ marginTop: '0.4rem' }}
-                    onClick={() => alert(`Initiating action: ${act.title} in ${act.area}`)}
+                    onClick={() => {
+                      setSelectedAction(act);
+                      setShowDeployModal(true);
+                    }}
                   >
                     DEPLOY ACTION
                   </button>
@@ -889,7 +1189,7 @@ export default function App() {
           </div>
 
           {/* 13. REPORTS */}
-          <div className="cyber-card-frame">
+          <div className="cyber-card-frame" id="section-reports">
             <div className="card-header-bar">
               <div className="card-title-wrap">
                 <h3>REPORTS & POLICY BRIEFS</h3>
@@ -899,7 +1199,7 @@ export default function App() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               {reportsData.map((rep) => (
-                <div key={rep.title} style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={rep.id || rep.title} style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-title)', fontWeight: 900, fontSize: '0.88rem', color: '#FFF' }}>{rep.title}</div>
                     <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '0.15rem' }}>{rep.text}</div>
@@ -915,7 +1215,7 @@ export default function App() {
                     <button
                       type="button"
                       className="btn-primary"
-                      onClick={() => alert(`Downloading ${rep.title}...`)}
+                      onClick={() => handleDownloadReport(rep)}
                     >
                       DOWNLOAD
                     </button>
@@ -933,22 +1233,108 @@ export default function App() {
       {/* Alert Modal */}
       <Modal
         open={showAlertModal}
-        onClose={() => setShowAlertModal(false)}
+        onClose={() => {
+          setAlertSuccessMsg(null);
+          setShowAlertModal(false);
+        }}
         title="OPERATIONAL HEAT RELIEF DISPATCH"
         tag="EMERGENCY DISPATCH"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--border-critical)', padding: '1rem', borderRadius: '10px', color: '#FFF', fontSize: '0.82rem', lineHeight: 1.4 }}>
-            🚨 Initiating cooling misting trucks and hydration stations for <strong>{selectedLocality.name}</strong>.
+            🚨 Initiating cooling misting trucks, hydration hubs, and shaded transit zones for <strong>{selectedLocality.name}</strong>.
           </div>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => { alert(`Relief units dispatched to ${selectedLocality.name}`); setShowAlertModal(false); }}
-          >
-            CONFIRM DISPATCH
-          </button>
+          <div style={{ fontSize: '0.75rem', color: '#CBD5E1' }}>
+            Current Ambient Temperature: <strong>{formatTemp(selectedLocality.airTemp)}</strong> | Heat Index: <strong>{formatTemp(selectedLocality.heatIndex)}</strong>
+          </div>
+
+          {alertSuccessMsg && (
+            <div style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid var(--color-teal)', padding: '0.75rem', borderRadius: '8px', color: 'var(--color-teal)', fontSize: '0.8rem', fontWeight: 700 }}>
+              ✓ {alertSuccessMsg}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ flex: 1 }}
+              onClick={() => {
+                setAlertSuccessMsg(null);
+                setShowAlertModal(false);
+              }}
+            >
+              CANCEL
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ flex: 1.5 }}
+              onClick={() => {
+                const newNotif = {
+                  id: Date.now(),
+                  title: `Relief Units Dispatched to ${selectedLocality.name}`,
+                  time: 'Just now',
+                  icon: '🚨',
+                  unread: true,
+                };
+                setNotifications((prev) => [newNotif, ...prev]);
+                setAlertSuccessMsg(`Relief units and misting stations dispatched to ${selectedLocality.name}`);
+                setTimeout(() => {
+                  setAlertSuccessMsg(null);
+                  setShowAlertModal(false);
+                }, 1800);
+              }}
+            >
+              CONFIRM DISPATCH
+            </button>
+          </div>
         </div>
+      </Modal>
+
+      {/* Deploy Action Modal */}
+      <Modal
+        open={showDeployModal}
+        onClose={() => setShowDeployModal(false)}
+        title={selectedAction ? `DEPLOY: ${selectedAction.title.toUpperCase()}` : 'DEPLOY ACTION'}
+        tag="MUNICIPAL EXECUTION"
+      >
+        {selectedAction && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ background: 'rgba(0, 242, 254, 0.1)', border: '1px solid var(--border-cyber)', padding: '1rem', borderRadius: '10px', color: '#FFF', fontSize: '0.82rem', lineHeight: 1.4 }}>
+              <div style={{ fontWeight: 800, color: 'var(--color-cyan)', marginBottom: '0.3rem' }}>Priority Target: {selectedAction.area}</div>
+              <p>{selectedAction.actionDetails || selectedAction.impact}</p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#94A3B8' }}>
+                AI Model Confidence: <strong>{selectedAction.confidence}</strong> | Impact: <strong>{selectedAction.impact}</strong>
+              </div>
+            </div>
+
+            {actionSuccessMsg && (
+              <div style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid var(--color-teal)', padding: '0.75rem', borderRadius: '8px', color: 'var(--color-teal)', fontSize: '0.8rem', fontWeight: 700 }}>
+                ✓ {actionSuccessMsg}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ flex: 1 }}
+                onClick={() => setShowDeployModal(false)}
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ flex: 1.5 }}
+                onClick={handleConfirmDeploy}
+              >
+                CONFIRM & EXECUTE DISPATCH
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Full AI Analysis Modal */}
@@ -963,6 +1349,16 @@ export default function App() {
           <p style={{ fontSize: '0.82rem', color: '#CBD5E1', lineHeight: 1.5 }}>
             The AI platform integrates high-resolution satellite land surface temperature anomaly layers, census demographic density, occupational exposure rates, and urban green-canopy cover indices across all Chennai wards.
           </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ color: 'var(--color-crimson)', fontWeight: 800, fontSize: '0.8rem' }}>High-Risk Exposure Vector</div>
+              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '0.2rem' }}>Perambur, Royapuram, and T. Nagar feature heavy asphalt-to-canopy ratios resulting in localized nocturnal heat trapping.</div>
+            </div>
+            <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ color: 'var(--color-teal)', fontWeight: 800, fontSize: '0.8rem' }}>Ecological Buffer Vector</div>
+              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '0.2rem' }}>Adyar and coastal corridors demonstrate up to 6.4°C lower radiant heat retention due to maritime breeze and mature tree canopy.</div>
+            </div>
+          </div>
         </div>
       </Modal>
 
@@ -976,11 +1372,15 @@ export default function App() {
       >
         <div className="chennai-map-canvas" style={{ height: '480px' }}>
           <div className="radar-sweep-beam" />
-          {chennaiLocations.map((loc) => (
+          {displayLocations.map((loc) => (
             <div
               key={loc.id}
               className={`map-locality-pin ${loc.offset}`}
               style={{ left: `${loc.x}%`, top: `${loc.y}%` }}
+              onClick={() => {
+                setSelectedLocalityId(loc.id);
+                setShowMapModal(false);
+              }}
             >
               <div className={`pin-hotspot-dot ${loc.risk.toLowerCase()}`} />
               <div className="pin-label-box">
@@ -1000,9 +1400,14 @@ export default function App() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontSize: '0.82rem', color: '#E2E8F0' }}>
           <div style={{ background: 'rgba(255, 85, 0, 0.15)', border: '1px solid var(--border-heat-orange)', padding: '0.85rem', borderRadius: '10px' }}>
-            🔥 <strong>Extreme Heat Alert:</strong> Limit outdoor exertion between 11:00 AM and 4:00 PM.
+            🔥 <strong>Extreme Heat Advisory:</strong> Limit outdoor physical exertion between 11:00 AM and 4:00 PM in North & Central Chennai corridors.
           </div>
-          <div>💧 <strong>Hydration Hubs:</strong> 42 free electrolyte stations active across Perambur & Royapuram.</div>
+          <div style={{ background: 'rgba(0, 242, 254, 0.1)', border: '1px solid var(--border-cyber)', padding: '0.85rem', borderRadius: '10px' }}>
+            💧 <strong>Hydration Hubs:</strong> 42 free electrolyte & chilled water stations actively dispensing across Perambur, Royapuram, and T. Nagar.
+          </div>
+          <div style={{ background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.4)', padding: '0.85rem', borderRadius: '10px' }}>
+            🏥 <strong>First-Aid Cooling Centers:</strong> Dedicated heat stroke response units stationed at all municipal primary health clinics.
+          </div>
         </div>
       </Modal>
 
@@ -1014,13 +1419,18 @@ export default function App() {
         tag="POLICY BRIEF"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <p style={{ fontSize: '0.82rem', color: '#94A3B8' }}>{selectedReport?.text}</p>
+          <p style={{ fontSize: '0.82rem', color: '#CBD5E1', lineHeight: 1.5 }}>{selectedReport?.text}</p>
+          <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.75rem', color: '#94A3B8' }}>
+            <div>Monitoring Period: <strong>Last 7 Days</strong></div>
+            <div>Dataset: <strong>Open-Meteo Telemetry & Satellite Land Surface Indices</strong></div>
+            <div>Status: <strong>Verified by Chennai Climate Intelligence Engine</strong></div>
+          </div>
           <button
             type="button"
             className="btn-primary"
-            onClick={() => { alert(`Downloading PDF for ${selectedReport?.title}...`); setShowReportModal(false); }}
+            onClick={() => handleDownloadReport(selectedReport)}
           >
-            DOWNLOAD PDF BRIEF
+            DOWNLOAD PDF / MARKDOWN BRIEF
           </button>
         </div>
       </Modal>
@@ -1032,18 +1442,34 @@ export default function App() {
         title="SYSTEM CONFIGURATION"
         tag="SETTINGS"
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.4)', padding: '0.85rem', borderRadius: '10px' }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-title)', fontWeight: 800, color: '#FFF', fontSize: '0.85rem' }}>Temperature Unit</div>
-            <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Celsius / Fahrenheit Switch</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.4)', padding: '0.85rem', borderRadius: '10px' }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-title)', fontWeight: 800, color: '#FFF', fontSize: '0.85rem' }}>Temperature Unit</div>
+              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Celsius (°C) / Fahrenheit (°F)</div>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setTempUnit(tempUnit === 'C' ? 'F' : 'C')}
+            >
+              °{tempUnit}
+            </button>
           </div>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setTempUnit(tempUnit === 'C' ? 'F' : 'C')}
-          >
-            °{tempUnit}
-          </button>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.4)', padding: '0.85rem', borderRadius: '10px' }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-title)', fontWeight: 800, color: '#FFF', fontSize: '0.85rem' }}>FastAPI Backend Endpoint</div>
+              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{API_URL}</div>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={fetchDashboardData}
+            >
+              Test Connection
+            </button>
+          </div>
         </div>
       </Modal>
 
