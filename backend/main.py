@@ -20,7 +20,10 @@ from sqlalchemy.exc import SQLAlchemyError
 try:
     from database.db import init_db
 except ImportError:
-    from db import init_db
+    try:
+        from db import init_db
+    except ImportError:
+        pass
 
 try:
     from backend.routes.api import router
@@ -30,23 +33,25 @@ except ImportError:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Warning during init_db: {e}")
     yield
 
 
-frontend_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "FRONTEND_ORIGINS",
-        "http://localhost:3000,"
-        "http://localhost:5173,"
-        "http://localhost:5174,"
-        "http://127.0.0.1:3000,"
-        "http://127.0.0.1:5173,"
-        "http://127.0.0.1:5174",
-    ).split(",")
-    if origin.strip()
+DEFAULT_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "https://thermal-equity-ai.netlify.app",
 ]
+
+env_origins = [o.strip() for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
+frontend_origins = list(dict.fromkeys(DEFAULT_ORIGINS + env_origins))
 
 
 app = FastAPI(
@@ -60,7 +65,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=frontend_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.netlify\.app|.*\.railway\.app)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.netlify\.app|.*\.railway\.app|.*\.onrender\.com|.*\.vercel\.app)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -100,7 +105,9 @@ async def database_exception_handler(
 @app.get("/", tags=["Health"])
 def home():
     return {
-        "message": "Thermal Equity AI backend is working!"
+        "message": "Thermal Equity AI backend is working!",
+        "status": "online",
+        "docs": "/docs",
     }
 
 

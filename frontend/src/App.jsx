@@ -1,7 +1,42 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import './App.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const PRODUCTION_API_URL = 'https://thermal-equity-ai.onrender.com';
+const DEFAULT_ENV_API = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
+function getInitialApiUrl() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_ENV_API || PRODUCTION_API_URL;
+  }
+  
+  const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  
+  // 1. Check user override in localStorage (if valid)
+  const stored = localStorage.getItem('thermal_equity_api_url');
+  if (stored !== null && stored.trim() !== '') {
+    const cleanStored = stored.trim().replace(/\/+$/, '');
+    // If user is in production, ignore any stale localhost URL stored in localStorage
+    if (isLocalHost || (!cleanStored.includes('localhost') && !cleanStored.includes('127.0.0.1'))) {
+      return cleanStored;
+    }
+  }
+
+  // 2. If environment variable is set and not pointing to localhost in a production environment
+  if (DEFAULT_ENV_API) {
+    const isEnvLocal = DEFAULT_ENV_API.includes('localhost') || DEFAULT_ENV_API.includes('127.0.0.1');
+    if (isLocalHost || !isEnvLocal) {
+      return DEFAULT_ENV_API;
+    }
+  }
+
+  // 3. Local development fallback
+  if (isLocalHost) {
+    return 'http://127.0.0.1:8000';
+  }
+
+  // 4. Production default
+  return PRODUCTION_API_URL;
+}
 
 // --- CHENNAI BASE LOCALITIES DATASET ---
 const chennaiLocations = [
@@ -263,6 +298,10 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  // API URL State with fallback to Render Production Backend
+  const [apiUrl, setApiUrl] = useState(getInitialApiUrl);
+  const API_URL = useMemo(() => (apiUrl || getInitialApiUrl()).replace(/\/+$/, ''), [apiUrl]);
+
   // Modals state
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [showInsightsModal, setShowInsightsModal] = useState(false);
@@ -316,10 +355,11 @@ export default function App() {
 
   // Fetch Dashboard Summary from FastAPI Backend
   const fetchDashboardData = useCallback(async () => {
-    console.log('[API] Dashboard request started: fetching /api/dashboard/summary from', `${API_URL}/api/dashboard/summary`);
+    const endpoint = `${API_URL}/api/dashboard/summary`;
+    console.log('[API] Dashboard request started: fetching /api/dashboard/summary from', endpoint);
     try {
       setBackendLoading(true);
-      const response = await fetch(`${API_URL}/api/dashboard/summary`);
+      const response = await fetch(endpoint);
       console.log('[API] Dashboard response received: status', response.status, response.statusText);
 
       if (!response.ok) {
@@ -338,7 +378,7 @@ export default function App() {
     } finally {
       setBackendLoading(false);
     }
-  }, []);
+  }, [API_URL]);
 
   // Initial fetch on mount + auto refresh every 30s
   useEffect(() => {
@@ -1457,18 +1497,47 @@ export default function App() {
             </button>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.4)', padding: '0.85rem', borderRadius: '10px' }}>
-            <div>
-              <div style={{ fontFamily: 'var(--font-title)', fontWeight: 800, color: '#FFF', fontSize: '0.85rem' }}>FastAPI Backend Endpoint</div>
-              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{API_URL}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', background: 'rgba(0,0,0,0.4)', padding: '0.85rem', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontFamily: 'var(--font-title)', fontWeight: 800, color: '#FFF', fontSize: '0.85rem' }}>FastAPI Backend Endpoint</div>
+                <div style={{ fontSize: '0.72rem', color: '#64748B', wordBreak: 'break-all' }}>{API_URL}</div>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={fetchDashboardData}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                Test Connection
+              </button>
             </div>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={fetchDashboardData}
-            >
-              Test Connection
-            </button>
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ fontSize: '0.68rem', padding: '0.25rem 0.55rem' }}
+                onClick={() => {
+                  localStorage.removeItem('thermal_equity_api_url');
+                  setApiUrl(PRODUCTION_API_URL);
+                }}
+              >
+                Reset to Production
+              </button>
+              {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ fontSize: '0.68rem', padding: '0.25rem 0.55rem' }}
+                  onClick={() => {
+                    localStorage.setItem('thermal_equity_api_url', 'http://127.0.0.1:8000');
+                    setApiUrl('http://127.0.0.1:8000');
+                  }}
+                >
+                  Use Localhost
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </Modal>
