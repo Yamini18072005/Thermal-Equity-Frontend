@@ -40,37 +40,21 @@ async def lifespan(app: FastAPI):
     yield
 
 
-DEFAULT_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "https://thermal-equity-ai.netlify.app",
-]
-
-env_origins = [o.strip() for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
-frontend_origins = list(dict.fromkeys(DEFAULT_ORIGINS + env_origins))
-
-
 app = FastAPI(
     title="Thermal Equity AI API",
     version="1.0.0",
-    description="Urban thermal equity data and risk assessment API.",
+    description="Urban thermal equity data and risk assessment API for Greater Chennai Corporation.",
     lifespan=lifespan,
 )
 
-
+# Bulletproof CORS: allow all origins so Vercel, Netlify, and local development can seamlessly fetch
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.netlify\.app|.*\.railway\.app|.*\.onrender\.com|.*\.vercel\.app)(:\d+)?$",
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 app.include_router(router)
 

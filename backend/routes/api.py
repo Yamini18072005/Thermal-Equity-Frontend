@@ -7,6 +7,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+import os
+import sys
+from pathlib import Path
+
+# Add project root and backend directory to sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 try:
     from database.db import get_db
     from backend.models.models import Alert, Location, RiskAssessment, ThermalData

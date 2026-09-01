@@ -9,31 +9,21 @@ function getInitialApiUrl() {
     return DEFAULT_ENV_API || PRODUCTION_API_URL;
   }
 
-  const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-  // 1. Check user override in localStorage (if valid)
+  // 1. Check user override in localStorage (if set and not pointing to dead localhost)
   const stored = localStorage.getItem('thermal_equity_api_url');
   if (stored !== null && stored.trim() !== '') {
     const cleanStored = stored.trim().replace(/\/+$/, '');
-    if (isLocalHost || (!cleanStored.includes('localhost') && !cleanStored.includes('127.0.0.1'))) {
+    if (!cleanStored.includes('localhost') && !cleanStored.includes('127.0.0.1')) {
       return cleanStored;
     }
   }
 
-  // 2. If environment variable is set and valid
-  if (DEFAULT_ENV_API) {
-    const isEnvLocal = DEFAULT_ENV_API.includes('localhost') || DEFAULT_ENV_API.includes('127.0.0.1');
-    if (isLocalHost || !isEnvLocal) {
-      return DEFAULT_ENV_API;
-    }
+  // 2. If environment variable is set and points to a cloud backend
+  if (DEFAULT_ENV_API && !DEFAULT_ENV_API.includes('localhost') && !DEFAULT_ENV_API.includes('127.0.0.1')) {
+    return DEFAULT_ENV_API;
   }
 
-  // 3. Local development fallback
-  if (isLocalHost) {
-    return 'http://127.0.0.1:8000';
-  }
-
-  // 4. Production default (Render Cloud Backend)
+  // 3. Default to live Render cloud backend everywhere
   return PRODUCTION_API_URL;
 }
 
