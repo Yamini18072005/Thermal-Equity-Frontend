@@ -16,7 +16,7 @@ try:
         get_mitigation_recommendations,
         predict_thermal_risk,
     )
-    from backend.services.weather_service import get_weather
+    from backend.services.weather_service import get_weather, get_batch_weather
     from backend.schemas.schemas import (
         AIInsightItem,
         AlertCreate,
@@ -43,7 +43,7 @@ except ImportError:
         get_mitigation_recommendations,
         predict_thermal_risk,
     )
-    from services.weather_service import get_weather
+    from services.weather_service import get_weather, get_batch_weather
     from schemas.schemas import (
         AIInsightItem,
         AlertCreate,
@@ -191,23 +191,37 @@ def sync_weather_to_thermal_data(
 @router.post(
     "/weather/sync-all",
     tags=["Weather"],
-    description="Synchronize live weather data for all registered Chennai stations.",
+    description="Synchronize live weather data for all registered Chennai stations in batch.",
 )
 def sync_all_stations(
     database: Session = Depends(get_db),
 ):
-    locations = database.scalars(select(Location)).all()
+    locations = database.scalars(select(Location).order_by(Location.id)).all()
     if not locations:
         return {"synced": 0, "message": "No locations registered to sync"}
 
     synced_count = 0
     errors = []
-
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    for loc in locations:
+
+    coords = [(loc.latitude, loc.longitude) for loc in locations]
+    try:
+        weather_list = get_batch_weather(coords)
+    except Exception as e:
+        weather_list = []
+        errors.append(f"Batch weather fetch error: {str(e)}")
+
+    for idx, loc in enumerate(locations):
         try:
-            w = get_weather(loc.latitude, loc.longitude)
-            curr = w.get("current", {})
+            curr = {}
+            if idx < len(weather_list) and isinstance(weather_list[idx], dict):
+                curr = weather_list[idx].get("current", {})
+            
+            if not curr:
+                # Fallback to individual fetch if batch index was missing
+                w = get_weather(loc.latitude, loc.longitude)
+                curr = w.get("current", {})
+
             temp = curr.get("temperature_2m")
             hum = curr.get("relative_humidity_2m")
             hi = curr.get("apparent_temperature")
