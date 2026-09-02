@@ -171,6 +171,30 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // Console Diagnostics & System Startup Logs for Review / Inspect
+  useEffect(() => {
+    console.log(
+      '%c🔥 THERMAL EQUITY AI %c| Chennai Urban Climate Intelligence Platform',
+      'background: #00F2FE; color: #060A17; font-weight: 900; font-size: 13px; padding: 4px 10px; border-radius: 4px;',
+      'color: #00F2FE; font-weight: 800; font-size: 13px;'
+    );
+    console.log(
+      '%c📡 Backend API Gateway:%c ' + API_URL,
+      'color: #94A3B8; font-weight: 700;',
+      'color: #10B981; font-weight: 800;'
+    );
+    console.log(
+      '%c📊 Monitored Region:%c Greater Chennai Corporation (8 Wards: Perambur, Royapuram, T. Nagar, Ambattur, Guindy, Velachery, Anna Nagar, Adyar)',
+      'color: #94A3B8; font-weight: 700;',
+      'color: #00F2FE; font-weight: 700;'
+    );
+    console.log(
+      '%c🛰 Environmental Ingestion:%c Open-Meteo Synoptic Telemetry + Landsat-8 Collection-2 LST + CPCB CAAQMS Air Quality Feeds',
+      'color: #94A3B8; font-weight: 700;',
+      'color: #F59E0B; font-weight: 700;'
+    );
+  }, [API_URL]);
+
   // Fetch Dashboard Summary, Locations, Alerts, Insights & Recommendations from FastAPI Backend
   const fetchAllBackendData = useCallback(async () => {
     try {
@@ -193,6 +217,15 @@ export default function App() {
         setDashboardData(summaryData);
         setBackendError(null);
         retryCountRef.current = 0;
+
+        console.log(
+          '%c✓ [FastAPI Stream Active]%c ' +
+          summaryData.total_monitored_locations + ' Stations Synchronized | ' +
+          summaryData.recent_measurements + ' Telemetry Readings | ' +
+          summaryData.active_alerts + ' Active Advisories',
+          'background: rgba(16, 185, 129, 0.2); color: #10B981; font-weight: 800; padding: 2px 8px; border-radius: 4px;',
+          'color: #E2E8F0; font-weight: 700;'
+        );
       } else {
         throw new Error('Could not reach FastAPI summary endpoint');
       }
@@ -218,6 +251,7 @@ export default function App() {
       }
     } catch (error) {
       setBackendError(error.message);
+      console.warn('[FastAPI Telemetry Stream] Connecting to cloud API at', API_URL, ':', error.message);
       if (retryCountRef.current < 2) {
         retryCountRef.current += 1;
         setTimeout(fetchAllBackendData, 4000);
@@ -238,10 +272,10 @@ export default function App() {
   const handleTriggerWeatherSync = async () => {
     try {
       setIsSyncingWeather(true);
+      console.log('%c↻ [Telemetry Refresh]%c Triggering batch Open-Meteo & Landsat-8 sync for 8 Chennai stations...', 'color: #00F2FE; font-weight: 700;', 'color: #94A3B8;');
       await fetch(`${API_URL}/api/weather/sync-all`, { method: 'POST' });
       await fetchAllBackendData();
     } catch (err) {
-      // Re-fetch dashboard summary
       await fetchAllBackendData();
     } finally {
       setIsSyncingWeather(false);
